@@ -9,13 +9,15 @@ import { VimState } from '../state/vimState';
 import { configuration } from '../configuration/configuration';
 
 class CommandItem implements vscode.QuickPickItem {
-  public label: string;
-  public description?: string;
   public type: 'input' | 'history';
-  constructor(type: 'input' | 'history', label: string, description?: string) {
+  public label: string;
+  public description: string;
+  public detail?: string;
+  constructor(type: 'input' | 'history', description: string, detail?) {
     this.type = type;
-    this.label = label;
+    this.label = type === 'input' ? '$(pencil)' : '$(history)';
     this.description = description;
+    this.detail = detail;
   }
 }
 
@@ -106,7 +108,7 @@ class CommandLine {
       this._logger.debug('No active document');
       return;
     }
-    const newMethod = true;
+    const newMethod = true; // FIXME make it an option
     const cmd = newMethod
       ? await this.promptForCommand(initialText)
       : await vscode.window.showInputBox(this.getInputBoxOptions(initialText));
@@ -117,8 +119,10 @@ class CommandLine {
     try {
       return await new Promise<string | undefined>((resolve, reject) => {
         const input = vscode.window.createQuickPick<CommandItem>();
-        input.placeholder = 'Vim command Line';
-        input.items = text ? [new CommandItem('input', text, '(input')] : [];
+        input.title = 'Vim command Line';
+        input.matchOnDescription = true;
+        input.placeholder = 'Enter your command';
+        input.items = text ? [new CommandItem('input', text, 'current input')] : [];
 
         const updateQuickPick = (value?: string): void => {
           if (!value) {
@@ -127,11 +131,10 @@ class CommandLine {
             }
             return;
           }
-          if (input.items[0] && input.items[0].type === 'input') {
-            input.items = [new CommandItem('input', value, '(input)')].concat(input.items.slice(1));
-          } else {
-            input.items = [new CommandItem('input', value, '(input)')].concat(input.items);
-          }
+          input.items = [new CommandItem('input', value, 'current input')].concat(
+            input.items[0] && input.items[0].type === 'input' ? input.items.slice(1) : input.items
+          );
+
           // §todo: add autocomplete suggestions
         };
 
@@ -140,17 +143,17 @@ class CommandLine {
           input.onDidChangeSelection((items: CommandItem[]) => {
             const item = items[0];
             if (item.type === 'history') {
-              resolve(item.label);
+              resolve(item.description);
               input.hide();
               // do not record new input in history
               // §todo : maybe reorder
             } else if (item.type === 'input') {
-              resolve(item.label);
+              resolve(item.description);
               input.hide();
               // record new input in history
               if (!item.label.startsWith(' ') && this._memo) {
                 const currentHistory: string[] = this._memo.get(VIM_HISTORY_KEY, []);
-                currentHistory.unshift(item.label);
+                currentHistory.unshift(item.description);
                 this._memo.update(VIM_HISTORY_KEY, currentHistory);
               }
             }
@@ -167,7 +170,7 @@ class CommandLine {
               .get(VIM_HISTORY_KEY, [])
               .map(
                 (cmd: string, index: number) =>
-                  new CommandItem('history', cmd, `(history item ${index})`)
+                  new CommandItem('history', cmd, `history item ${index}`)
               );
         input.items = input.items.concat(historyItems);
       });
