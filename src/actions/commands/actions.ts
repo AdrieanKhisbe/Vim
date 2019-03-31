@@ -1814,29 +1814,38 @@ class CommandShowCommandLine extends BaseCommand {
   }
 
   public async exec(position: Position, vimState: VimState): Promise<VimState> {
-    if (vimState.currentMode === ModeName.Normal) {
-      if (vimState.recordedState.count) {
-        vimState.currentCommandlineText = `.,.+${vimState.recordedState.count - 1}`;
-      } else {
-        vimState.currentCommandlineText = '';
-      }
-    } else {
-      vimState.currentCommandlineText = "'<,'>";
-    }
-
-    // Initialize the cursor position
-    vimState.statusBarCursorCharacterPos = vimState.currentCommandlineText.length;
+    const commandPrefix =
+      vimState.currentMode === ModeName.Normal
+        ? vimState.recordedState.count
+          ? `.,.+${vimState.recordedState.count - 1}`
+          : ''
+        : "'<,'>";
 
     // Store the current mode for use in retaining selection
     commandLine.previousMode = vimState.currentMode;
 
     // Change to the new mode
     await vimState.setCurrentMode(ModeName.CommandlineInProgress);
+    const newPrompt = true; // FIXME: make it an option
+    if (!newPrompt) {
+      // Initialize the cursor position
+      vimState.statusBarCursorCharacterPos = vimState.currentCommandlineText.length;
+      // Reset history navigation index
+      commandLine.commandlineHistoryIndex = commandLine.historyEntries.length;
 
-    // Reset history navigation index
-    commandLine.commandlineHistoryIndex = commandLine.historyEntries.length;
+      vimState.currentCommandlineText = commandPrefix;
 
-    return vimState;
+      return vimState;
+    } else {
+      try {
+        await commandLine.PromptAndRun(commandPrefix, vimState);
+      } catch (err) {
+        throw err;
+      } finally {
+        await vimState.setCurrentMode(ModeName.Normal);
+      }
+      return vimState;
+    }
   }
 }
 

@@ -106,7 +106,6 @@ class CommandLine {
       this._logger.debug('No active document');
       return;
     }
-    console.log('NOOO');
     const newMethod = true;
     const cmd = newMethod
       ? await this.promptForCommand(initialText)
@@ -129,7 +128,7 @@ class CommandLine {
             return;
           }
           if (input.items[0] && input.items[0].type === 'input') {
-            input.items[0].label = value;
+            input.items = [new CommandItem('input', value, '(input)')].concat(input.items.slice(1));
           } else {
             input.items = [new CommandItem('input', value, '(input)')].concat(input.items);
           }
@@ -140,12 +139,12 @@ class CommandLine {
           input.onDidChangeValue(updateQuickPick),
           input.onDidChangeSelection((items: CommandItem[]) => {
             const item = items[0];
-            if (item.type === 'input') {
+            if (item.type === 'history') {
               resolve(item.label);
               input.hide();
               // do not record new input in history
               // §todo : maybe reorder
-            } else if (item.type === 'history') {
+            } else if (item.type === 'input') {
               resolve(item.label);
               input.hide();
               // record new input in history
