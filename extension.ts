@@ -97,6 +97,7 @@ export async function activate(context: vscode.ExtensionContext) {
   extensionContext = context;
   extensionContext.subscriptions.push(StatusBar);
 
+  commandLine.setMemo(context.globalState);
   // load state
   await Promise.all([commandLine.load(), globalState.load()]);
 

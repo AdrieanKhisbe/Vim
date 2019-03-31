@@ -8,10 +8,23 @@ import { VimError, ErrorCode } from '../error';
 import { VimState } from '../state/vimState';
 import { configuration } from '../configuration/configuration';
 
+class CommandItem implements vscode.QuickPickItem {
+  public label: string;
+  public description?: string;
+  public type: 'input' | 'history';
+  constructor(type: 'input' | 'history', label: string, description?: string) {
+    this.type = type;
+    this.label = label;
+    this.description = description;
+  }
+}
+
+const VIM_HISTORY_KEY = 'VIM_HISTORY_KEY';
+
 class CommandLine {
   private _history: CommandLineHistory;
   private readonly _logger = Logger.get('CommandLine');
-
+  private _memo: vscode.Memento | undefined;
   /**
    *  Index used for navigating commandline history with <up> and <down>
    */
@@ -23,6 +36,10 @@ class CommandLine {
 
   public set commandlineHistoryIndex(index: number) {
     this._commandLineHistoryIndex = index;
+  }
+
+  public setMemo(memo: vscode.Memento) {
+    this._memo = memo;
   }
 
   public get historyEntries() {
@@ -89,8 +106,75 @@ class CommandLine {
       this._logger.debug('No active document');
       return;
     }
-    let cmd = await vscode.window.showInputBox(this.getInputBoxOptions(initialText));
+    console.log('NOOO');
+    const newMethod = true;
+    const cmd = newMethod
+      ? await this.promptForCommand(initialText)
+      : await vscode.window.showInputBox(this.getInputBoxOptions(initialText));
     await this.Run(cmd!, vimState);
+  }
+  private async promptForCommand(text: string): Promise<string | undefined> {
+    const disposables: vscode.Disposable[] = [];
+    try {
+      return await new Promise<string | undefined>((resolve, reject) => {
+        const input = vscode.window.createQuickPick<CommandItem>();
+        input.placeholder = 'Vim command Line';
+        input.items = text ? [new CommandItem('input', text, '(input')] : [];
+
+        const updateQuickPick = (value?: string): void => {
+          if (!value) {
+            if (input.items[0] && input.items[0].type === 'input') {
+              input.items = input.items.slice(1);
+            }
+            return;
+          }
+          if (input.items[0] && input.items[0].type === 'input') {
+            input.items[0].label = value;
+          } else {
+            input.items = [new CommandItem('input', value, '(input)')].concat(input.items);
+          }
+          // §todo: add autocomplete suggestions
+        };
+
+        disposables.push(
+          input.onDidChangeValue(updateQuickPick),
+          input.onDidChangeSelection((items: CommandItem[]) => {
+            const item = items[0];
+            if (item.type === 'input') {
+              resolve(item.label);
+              input.hide();
+              // do not record new input in history
+              // §todo : maybe reorder
+            } else if (item.type === 'history') {
+              resolve(item.label);
+              input.hide();
+              // record new input in history
+              if (!item.label.startsWith(' ') && this._memo) {
+                const currentHistory: string[] = this._memo.get(VIM_HISTORY_KEY, []);
+                currentHistory.unshift(item.label);
+                this._memo.update(VIM_HISTORY_KEY, currentHistory);
+              }
+            }
+          }),
+          input.onDidHide(() => {
+            resolve(undefined);
+            input.dispose();
+          })
+        );
+        input.show();
+        const historyItems: CommandItem[] = !this._memo
+          ? []
+          : this._memo
+              .get(VIM_HISTORY_KEY, [])
+              .map(
+                (cmd: string, index: number) =>
+                  new CommandItem('history', cmd, `(history item ${index})`)
+              );
+        input.items = input.items.concat(historyItems);
+      });
+    } finally {
+      disposables.forEach(d => d.dispose());
+    }
   }
 
   private getInputBoxOptions(text: string): vscode.InputBoxOptions {
