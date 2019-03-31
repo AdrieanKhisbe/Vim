@@ -15,7 +15,7 @@ class CommandItem implements vscode.QuickPickItem {
   public detail?: string;
   constructor(type: 'input' | 'history', description: string, detail?) {
     this.type = type;
-    this.label = type === 'input' ? '$(pencil)' : '$(history)';
+    this.label = type === 'input' ? '$(chevron-right)  ' : '$(issue-reopened)';
     this.description = description;
     this.detail = detail;
   }
@@ -122,7 +122,7 @@ class CommandLine {
         input.title = 'Vim command Line';
         input.matchOnDescription = true;
         input.placeholder = 'Enter your command';
-        input.items = text ? [new CommandItem('input', text, 'current input')] : [];
+        input.items = text ? [new CommandItem('input', text)] : [];
 
         const updateQuickPick = (value?: string): void => {
           if (!value) {
@@ -131,7 +131,7 @@ class CommandLine {
             }
             return;
           }
-          input.items = [new CommandItem('input', value, 'current input')].concat(
+          input.items = [new CommandItem('input', value)].concat(
             input.items[0] && input.items[0].type === 'input' ? input.items.slice(1) : input.items
           );
 
